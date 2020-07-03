@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "20458430682",
+    "firebase_url": "https://task-gear.firebaseio.com",
+    "project_id": "task-gear",
+    "storage_bucket": "task-gear.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:20458430682:android:d5e02c4de9f17e43ef45e3",
+        "android_client_info": {
+          "package_name": "com.zed.taskgear"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "20458430682-rl8njdprbntsa7m4i3t267ccs3ctp2bg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zed.taskgear",
+            "certificate_hash": "b6ddcfb7411adf8f8366068eebacdf17741c43e4"
+          }
+        },
+        {
+          "client_id": "20458430682-p63m0c3ujfg6tlebc95mf4jb8o1etov9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBT49kvICgf3Mzbjn1RZWDhBvLswd8mKOc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "20458430682-p63m0c3ujfg6tlebc95mf4jb8o1etov9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

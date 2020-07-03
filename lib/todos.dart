@@ -4,160 +4,22 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:dynamic_theme/dynamic_theme.dart';
 import 'values/value.dart';
-import 'auth/auth_state.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:transparent_image/transparent_image.dart';
-import 'package:mqtt_client/mqtt_client.dart' as mqtt;
-import 'package:connectivity/connectivity.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'todo_details.dart';
+import 'package:intl/intl.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-class MyHomePage extends StatefulWidget {
+//import 'push_nofitications.dart';
+
+class ToDoPage extends StatefulWidget {
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _ToDoPageState createState() => _ToDoPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _ToDoPageState extends State<ToDoPage> {
 
-  mqtt.MqttClient client;
-  mqtt.MqttConnectionState connectionState;
-  Icon mqttCloudConnection = Icon(Icons.cloud);
-  StreamSubscription subscription;
-
-  void _subscribeToTopic(String topic) {
-    if (connectionState == mqtt.MqttConnectionState.connected) {
-      client.subscribe(topic, mqtt.MqttQos.atLeastOnce);
-    }
-  }
-
-  void _connect() async {
-    if(client == null) {
-      print("client is null initially");
-    }else{
-      print("client is not null initially");
-    }
-
-    client = mqtt.MqttClient(broker, '');
-    client.port = port;
-    client.useWebSocket = false;
-    client.logging(on: true);
-    client.keepAlivePeriod = 30;
-    client.onDisconnected = _onDisconnected;
-    final mqtt.MqttConnectMessage connMess = mqtt.MqttConnectMessage()
-        .withClientIdentifier(clientIdentifier)
-        .startClean() // Non persistent session for testing
-        .keepAliveFor(30)
-        .withWillQos(mqtt.MqttQos.atLeastOnce);
-    print('[MQTT client] MQTT client connecting....');
-    setState(() {
-      mqttCloudConnection = Icon(Icons.cloud_upload);
-    });
-    client.connectionMessage = connMess;
-
-
-    print('[MQTT client] ERROR: MQTT client connection failed - '
-        'disconnecting, state is ${client.connectionState}');
-    //_disconnect();
-    setState(() {
-      mqttCloudConnection = Icon(Icons.cloud_off);
-    });
-
-    await client.connect(username, passwd);
-    print("wait done");
-
-
-    if(client == null){
-      print('client id null');
-    }else{
-      if (client.connectionState == mqtt.MqttConnectionState.connected) {
-        _showSnackBar("You are connected!");
-        setState(() {
-          _applianceLoading = false;
-        });
-        print("connected");
-
-
-        setState(() {
-          connectionState = client.connectionState;
-          mqttCloudConnection = Icon(Icons.cloud_done);
-        });
-        subscription = client.updates.listen(_onMessage);
-        //_subscribeToTopic("app");
-      }else{
-        print("not connected");
-      }
-    }
-  }
-
-  void _onDisconnected() {
-    //_connect();
-
-    print('[MQTT client] _onDisconnected');
-    setState(() {
-      //topics.clear();
-      connectionState = client.connectionState;
-      client = null;
-      try{
-        subscription.cancel();
-      }catch(e){
-
-      }
-      subscription.cancel();
-      subscription = null;
-      mqttCloudConnection = Icon(Icons.cloud_off);
-    });
-    print('[MQTT client] MQTT client disconnected');
-  }
-
-  void _onMessage(List<mqtt.MqttReceivedMessage> event) {
-    final mqtt.MqttPublishMessage recMess = event[0].payload as mqtt.MqttPublishMessage;
-    final String message =  mqtt.MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-
-    String topic = event[0].topic;
-    if(topic.contains('/')){
-      String endpoint = topic.substring(topic.indexOf('/')+1, topic.length);
-
-
-      if(endpoint == "callback" || endpoint == "gpiostatus/callback"){
-        Map<String, dynamic> message_json = json.decode(message);
-        int gpio   = message_json['gpio'];
-        int action = message_json['action'];
-        //{"command": 2,"action": 0,"trigger": 0,"delay": 0.0,"gpio": 17}
-        _showSnackBar('GPIO:${gpio} is ${action == 1 ? 'ON' : 'OFF'}');
-
-        //_showSnackBar(listAppliances.where((appliance) => appliance['gpio'] == gpio).toString());
-
-//        if(status == "on"){
-////          if(!appliancesOn.contains(gpio)){
-////            setState(() {
-////              appliancesOn.add(gpio); //add
-////            });
-////          }
-//          if(endpoint == "callback"){
-//            _showSnackBar('Appliance switched ON');
-//          }
-//        }else if(status == "off"){
-////          try {
-////            setState(() {
-////              appliancesOn.remove(gpio);
-////            });
-////          } catch (e) {
-////            print(e);
-////          }
-//          if(endpoint == "callback"){
-//            _showSnackBar('Appliance switched OFF');
-//          }
-//        }else if(status == "triggered"){
-//          if(endpoint == "callback"){
-//            _showSnackBar('Appliance triggered');
-//          }
-//        }
-
-      }
-    }
-  }
-
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging();
 
   final GlobalKey<ScaffoldState> _scaffoldstate = new GlobalKey<ScaffoldState>();
 
@@ -177,17 +39,14 @@ class _MyHomePageState extends State<MyHomePage> {
     Navigator.pushNamed(context, '/login');
   }
 
-  Future<List<Appliance>> _fetchAppliances() async {
+  Future<List<ToDo>> _fetchToDos() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     apiToken = prefs.getString('apiToken');
-    final jobsListAPIUrl = '${base_url}/appliance?api_token=${apiToken}';
+    final jobsListAPIUrl = '${base_url}/todos?api_token=${apiToken}';
     final response = await http.get(jobsListAPIUrl);
     if (response.statusCode == 200) {
       List jsonResponse = json.decode(response.body);
-//      setState(() {
-//        listAppliances = jsonResponse;
-//      });
-      return jsonResponse.map((appliance) => new Appliance.fromJson(appliance)).toList();
+      return jsonResponse.map((appliance) => new ToDo.fromJson(appliance)).toList();
     } else {
       // throw Exception('Failed to load data from API');
     }
@@ -205,246 +64,113 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Future<List<Appliance>> _sendCommand(int id, String name, bool status, int trigger, double delay, int gpio, String serial) async {
-
-    if (connectionState != mqtt.MqttConnectionState.connected) {
-      _showSnackBar("Reconnecting ..");
-      _connect();
-    }
-
-    int action = status ? 1 : 0;
-    final mqtt.MqttClientPayloadBuilder builder = mqtt.MqttClientPayloadBuilder();
-    builder.addString('{"command": ${id},"action": ${action},"trigger": ${trigger},"delay": ${delay},"gpio": ${gpio}}');
-    client.publishMessage(serial,  mqtt.MqttQos.atLeastOnce, builder.payload);
-
-    _showSnackBar("Command Sent ..");
-
-    if(status){//on karo
-      if(!appliancesOn.contains(gpio)){
-        setState(() {
-          appliancesOn.add(gpio); //add
-        });
-      }
-    }else{ //off karo
-      try {
-        setState(() {
-          appliancesOn.remove(gpio);
-        });
-      } catch (e) {
-        print(e);
-      }
-    }
-  }
-
-  _displayDialog(BuildContext context,int id, String name, bool status, int trigger, double delay, int gpio, String serial) async {
-    return showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('Are you sure ?'),
-            actions: <Widget>[
-              new FlatButton(
-                child: new Text('Cancel'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              new FlatButton(
-                child: new Text('Yes'),
-                onPressed: () {
-                  _sendCommand(id, name, status, trigger, delay, gpio, serial);
-                  Navigator.of(context).pop();
-                },
-              ),
-
-            ],
-          );
-        });
-  }
-
-
-  ListView _applianceListView(data) {
-
+  var newFormat = DateFormat("dd-mm-yyyy");
+  
+  ListView _todoListView(data) {
     return ListView.separated(
         separatorBuilder: (context, index) => Divider(),
         itemCount: data.length,
         itemBuilder: (context, index) {
-
-          if(!subscribedSerials.contains(data[index].serial)){
-            //callback when command is sent
-            _subscribeToTopic(data[index].serial+"/callback");
-            //callback when we need to know the status
-            _subscribeToTopic(data[index].serial+"/gpiostatus/callback");
-            subscribedSerials.add(data[index].serial);
-          }
-
-//      if(!initialStatus.contains(data[index].gpio)){
-//        final mqtt.MqttClientPayloadBuilder builder = mqtt.MqttClientPayloadBuilder();
-//        builder.addString('{"gpio": ${data[index].gpio}}');
-//        String topic = "${data[index].serial}/gpiostatus";
-//        client.publishMessage(topic,  mqtt.MqttQos.atLeastOnce, builder.payload);
-//        initialStatus.add(data[index].gpio);
-//      }
-
-          return _tile(data[index].id, data[index].name, data[index].status, data[index].trigger, data[index].delay, data[index].gpio, data[index].serial, data[index].icon, data[index].gpio_type_id);
+          return _tile(data[index]);
         });
   }
-
-  ListTile _tile(int id, String name, bool status, int trigger, double delay, int gpio, String serial, String icon, int gpio_type_id) => ListTile(
-    key: Key(id.toString()),
-    title: Text(name,
+  
+  ListTile _tile(ToDo todo) => ListTile(
+    dense: false,
+    key: Key(todo.id.toString()),
+    title: Text(todo.name,
         style: TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          //color: Colors.teal,
         )
     ),
-    leading:
-    CachedNetworkImage(
-      placeholder: (context, url) => CircularProgressIndicator(),
-      imageUrl:
-      '${server_url}/icons/'+icon,
-      fadeInDuration: Duration(milliseconds: 300),
-      height: 40,
-    ),
-    //subtitle: Text("GPIO:${gpio}"),
-    trailing: trigger == 0 ? Wrap(
-      spacing: 12, // space between two icons
-      children: <Widget>[
-        IconButton(icon: Icon(Icons.cancel, size: 36),onPressed: (){
-          _sendCommand(id, name, false, trigger, delay, gpio, serial);
-        },), // icon-1
-        IconButton(icon: Icon(Icons.check_circle, size: 36),onPressed: (){
-          _sendCommand(id, name, true, trigger, delay, gpio, serial);
-        },), // icon-1/ icon-2
-      ],
-    ): RaisedButton(
-      onPressed: (){
-        _displayDialog(context, id, name, true, trigger, delay, gpio, serial);
-      },
-      child: Text("OPEN"),
-    ),
-//    trailing: trigger == 0 ? new Switch(value: appliancesOn.contains(gpio), onChanged: (status){
-//      _sendCommand(id, name, status, trigger, delay, gpio, serial);
-//    }) : RaisedButton(
-//      onPressed: (){
-//        _displayDialog(context, id, name, true, trigger, delay, gpio, serial);
-//      },
-//      child: Text("OPEN"),
-//    ),
-//    onTap: (){
-//      if(trigger == 0){
-//        //_subscribeToTopic(serial+"/callback");
-//        _sendCommand(id, name, !appliancesOn.contains(gpio), trigger, delay, gpio, serial);
-//      }else{
-//        _displayDialog(context, id, name, true, trigger, delay, gpio, serial);
-//      }
-//    },
-    onLongPress: (){
-//      _subscribeToTopic(serial+"/gpiostatus/callback");
-////
-////      final mqtt.MqttClientPayloadBuilder builder = mqtt.MqttClientPayloadBuilder();
-////      builder.addString('{"gpio": ${gpio}}');
-////      String topic = "${serial}/gpiostatus";
-////      client.publishMessage(topic,  mqtt.MqttQos.atLeastOnce, builder.payload);
-
-      _showSnackBar("GPIO:${gpio}");
+    leading: todo.done == 0 ? Icon(Icons.check_box_outline_blank) : Icon(Icons.check_box),
+    subtitle: Text(todo.scheduled != null ? newFormat.format(DateTime.parse(todo.scheduled)).toString() : 'Not Scheduled'),
+    onTap: (){
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ToDoDetailsPage(
+            todo: todo,
+          ),
+        ),
+      );
     },
   );
-  int _refreshAppliances = 0;
-  bool _applianceLoading = false;
+  bool _todoLoading = false;
+
+  String _message = '';
+
+  Future<http.Response> saveFCMToken(String token) {
+    return http.get(
+      '${base_url}/fcm_token?api_token=${apiToken}&fcm_token=${token}',
+    );
+  }
+
+  void getMessage() async{
+     _firebaseMessaging.requestNotificationPermissions();
+    _firebaseMessaging.configure();
+
+    // For testing purposes print the Firebase Messaging token
+    String token = await _firebaseMessaging.getToken();
+    print("FirebaseMessaging token: $token");
+
+    saveFCMToken(token);
+
+    _firebaseMessaging.configure(
+        onMessage: (Map<String, dynamic> message) async {
+      print('on message $message');
+      setState(() => _message = message["notification"]["title"]);
+      _showDialog(message["notification"]["title"],message["notification"]["body"]);
+    }, onResume: (Map<String, dynamic> message) async {
+      print('on resume $message');
+      setState(() => _message = message["notification"]["title"]);
+      _showDialog(message["notification"]["title"],message["notification"]["body"]);
+    }, onLaunch: (Map<String, dynamic> message) async {
+      print('on launch $message');
+      setState(() => _message = message["notification"]["title"]);
+      _showDialog(message["notification"]["title"],message["notification"]["body"]);
+    });
+
+  }
 
   @override
   void initState() {
     super.initState();
-    subscription = Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
-      if (result != ConnectivityResult.none) {
-        _connect();
-      }
-    });
-  }
+    getMessage();
+  }  
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch(state) {
-      case AppLifecycleState.resumed:
-        _reconnect();
-        break;
-      case AppLifecycleState.inactive:
-        _reconnect();
-        break;
-      case AppLifecycleState.paused:
-        _reconnect();
-        break;
-    }
-  }
-
-
-  //@override
-  //dispose() {
-  //  super.dispose();
-  //  subscription.cancel();
-  //}
-
-  void changeBrightness() {
-    DynamicTheme.of(context).setBrightness(Theme.of(context).brightness == Brightness.dark? Brightness.light: Brightness.dark);
-//    DynamicTheme.of(context).setThemeData(new ThemeData(
-//        primarySwatch: Theme.of(context).primaryColorLight == Colors.black? Colors.black: Colors.black
-//    ));
-  }
-
-  Choice _selectedChoice = choices[0];
-  void _select(Choice choice) {
-    setState(() {
-      _selectedChoice = choice;
-      if(_selectedChoice.toString() == "Profile"){
-        Navigator.pushNamed(context, '/profile');
-      }
-      else if(_selectedChoice.toString() == "Settings"){
-        Navigator.pushNamed(context, '/settings');
-      }
-      else if(_selectedChoice.toString() == "Dark/Light Mode"){
-        changeBrightness();
-      }
-      else if(_selectedChoice.toString() == "Logout"){
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            // return object of type Dialog
-            return AlertDialog(
-              title: new Text("Are you sure ?"),
-              content: new Text("Are you sure you want to log out ?"),
-              actions: <Widget>[
-                new FlatButton(
-                  child: new Text("Yes"),
-                  onPressed: () {
-                    _logOut();
-                  },
-                ),
-              ],
-            );
-          },
+  void _showDialog(String title, String body) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        // return object of type Dialog
+        return AlertDialog(
+          title: new Text(title),
+          content: new Text(body),
+          actions: <Widget>[
+            new FlatButton(
+              child: new Text("Close"),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
         );
-
-      }
-    });
+      },
+    );
   }
 
-  int _selectedIndex = 0;
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-      print(_selectedIndex);
-    });
-  }
 
-  Widget _loadAppliances (){
-    return FutureBuilder<List<Appliance>>(
-      future: this._fetchAppliances(),
+
+  Widget _loadTodos (){
+    return FutureBuilder<List<ToDo>>(
+      future: this._fetchToDos(),
       builder: (context, snapshot) {
 
         if (snapshot.hasData) {
-          List<Appliance> applianceData = snapshot.data;
-          return _applianceListView(applianceData);
+          List<ToDo> applianceData = snapshot.data;
+          return _todoListView(applianceData);
         } else if (snapshot.hasError) {
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -452,9 +178,8 @@ class _MyHomePageState extends State<MyHomePage> {
             children: <Widget>[
               GestureDetector(
                 child: Center(
-                  child: _applianceLoading ? new CircularProgressIndicator() : Icon(Icons.cloud_off, size: 96,),
+                  child: _todoLoading ? new CircularProgressIndicator() : Icon(Icons.cloud_off, size: 96,),
                 ),
-                onTap: _reconnect,
               ),
               Center(
                 child: Padding(
@@ -470,22 +195,7 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  void _reconnect(){
-    setState(() {
-      _applianceLoading = true;
-    });
-    this._refreshAppliances = this._refreshAppliances+1;
-
-    if (connectionState == mqtt.MqttConnectionState.connected) {
-      _showSnackBar("You are connected!");
-      setState(() {
-        _applianceLoading = false;
-      });
-    }else{
-      _showSnackBar("Reconnecting ..");
-      _connect();
-    }
-  }
+  bool _reload = false;
 
   @override
   Widget build(BuildContext context) {
@@ -496,31 +206,28 @@ class _MyHomePageState extends State<MyHomePage> {
       child: Scaffold(
         key: _scaffoldstate,
         body: Scaffold(
-          //drawer: appDrawer(context),
+          //drawer: appDrawer(context),          
           appBar: AppBar(
             automaticallyImplyLeading: false,
-            title: Text("Smart Home"),
+            title: Text("Task Gear"),
             actions: <Widget>[
-              PopupMenuButton<Choice>(
-                onSelected: _select,
-                //icon: Icon(Icons.account_circle),
-                itemBuilder: (BuildContext context) {
-                  return choices.map((Choice choice) {
-                    return PopupMenuItem<Choice>(
-                      value: choice,
-                      child: Text(choice.title),
-                    );
-                  }).toList();
-                },
-              ),
+              FlatButton(
+                onPressed: (){
+                  setState(() {
+                    _reload = _reload ? false : true;  
+                  });
+                }, 
+                child: Text("Refresh")
+              )
             ],
           ),
-          body: _loadAppliances(),
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _reconnect,
-          tooltip: 'Connection',
-          child: mqttCloudConnection,
+          body: _loadTodos(),
+          floatingActionButton: FloatingActionButton(
+            child: Icon(Icons.add),
+            onPressed: () async{
+              _showDialog("Coming Soon","For now, create tasks from web app!");
+            },
+          ),
         ),
       ),
     );

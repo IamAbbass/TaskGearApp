@@ -1,4 +1,12 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart';
+import 'values/value.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'todos.dart';
 
 void main() {
   runApp(MyApp());
@@ -9,20 +17,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Task Gear',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
+        brightness: Brightness.dark,
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: 'Task Gear'),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -56,9 +57,17 @@ class _MyHomePageState extends State<MyHomePage> {
       },
     );
   }
+  _checkLogin() async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    isLoggedin = prefs.getBool('isLoggedin');
+    if(isLoggedin == true){
+      Navigator.push(context,MaterialPageRoute(builder: (context) => ToDoPage()),);
+    }
+  }
 
   @override
   void initState() {
+    _checkLogin();
     super.initState();
   }
 
@@ -69,24 +78,22 @@ class _MyHomePageState extends State<MyHomePage> {
 
   bool loading = false;
 
+
   @override
   Widget build(BuildContext context) {
 
     _performLogin() async {
-
       if(emailController.text.length == 0){
         _showDialog('Email is required to login', 'Please enter your email address');
       }else if(passwordController.text.length == 0){
         _showDialog('Password is required to login', 'Please enter your password');
       }else{
-        setState(() {
-          loading = true;
-        });
-        // make GET request
+        setState(() {loading = true;});        
+
         String url = '${base_url}/signin?email=${emailController.text}&password=${passwordController.text}';
+        Response response = await get(url);
 
         try {
-          Response response = await get(url);
           int statusCode = response.statusCode;
           Map<String, String> headers = response.headers;
           String contentType = headers['content-type'];
@@ -99,18 +106,26 @@ class _MyHomePageState extends State<MyHomePage> {
             SharedPreferences prefs = await SharedPreferences.getInstance();
             await prefs.setBool('isLoggedin', isLoggedin);
             await prefs.setString('apiToken', apiToken);
+
+            _showDialog("GOOD", "GOOD");
+            
+            setState(() {loading = false;});
+            
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => MyHomePage()),
+              MaterialPageRoute(builder: (context) => ToDoPage()),
             );
+
           }else{
             _showDialog(json['title'], json['message']);
             isLoggedin  = false;
           }
-        } on SocketException catch (_) {
+        } catch (_) {
           _showDialog('No Internet!', 'Please check your network connection');
           setState(() {loading = false;});
         }
+
+        
       }
     }
 
@@ -175,7 +190,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ),
 
-                      Text("Smart Home", style: TextStyle(fontFamily: 'Montserrat', fontSize: 32.0, fontWeight: FontWeight.bold),),
+                      Text("Task Gear", style: TextStyle(fontFamily: 'Montserrat', fontSize: 32.0, fontWeight: FontWeight.bold),),
                       Text("Please Login", style: TextStyle(fontFamily: 'Montserrat', fontSize: 16.0),),
                       SizedBox(height: 20.0),
                       emailField,
